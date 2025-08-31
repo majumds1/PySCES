@@ -940,9 +940,9 @@ def print_energy_summary(au_mas, q, p, elecE):
         energy, Pkin, Veff = get_energy(au_mas, q, p, elecE, return_parts=True)
     
     print('--------------------------------------')
-    print('Total energy:        %12.6f a.u.' %energy)
-    print('Nuclear Kinetic:     %12.6f a.u.' %Pkin)
-    print('Effective Potential: %10.6f a.u.' %Veff)
+    print('Nuclear Kinetic:     %16.10f a.u.' %Pkin)
+    print('Effective Potential: %16.10f a.u.' %Veff)
+    print('Total energy:        %16.10f a.u.' %energy)
     print('--------------------------------------')
     return energy
 
@@ -979,6 +979,7 @@ def get_energy_SQC(au_mas, q, p, elecE, return_parts=False):
     p_e = p[:nel]
     n = 0.5 * q_e**2 + 0.5 * p_e**2 - opts._sqc_gamma
     Veff = np.mean(elecE)
+    print('    In get_energy_SQC: elecE = ', elecE, n, opts._sqc_gamma)
     for i in range(nel):
         for j in range(i+1, nel):
             Veff += (n[i] - n[j]) * (elecE[i] - elecE[j])/nel
@@ -1770,7 +1771,7 @@ def _verlet_position_step(elecE, grad, nac, yvar, dt, au_mas):
     p_nuc_old = p_all[nel:]  # old nuclear momentum variables
     q_nuc_old = q_all[nel:]  # old nuclear position variables
 
-    _p_half = p_nuc_old + 0.5*dt * nuc_der
+    _p_half = p_nuc_old + 0.5 * dt * nuc_der
     q_nuc_new = q_nuc_old + dt * _p_half / au_mas
 
     return q_nuc_new, _p_half
@@ -1846,7 +1847,7 @@ def _rk4_nuclear_step(elecE, grad, nac, yvar, dt, au_mas):
 
 def rk4_Uprop_step(elecE, grad, nac, yvar, dt, au_mas):
     q_nuc_new, p_nuc_new = _rk4_nuclear_step(elecE, grad, nac, yvar, dt, au_mas)
-    q_new, p_new = _uprop_step(elecE, nac, yvar, dt, au_mas, p_nuc_new)
+    q_new, p_new = _uprop_step(elecE, nac, yvar, dt, au_mas)
     y_new = np.concatenate((q_new, q_nuc_new, p_new, p_nuc_new))
     return y_new
 

@@ -284,7 +284,7 @@ def verlet_main(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         es_vars.time = t
         timers.traj_timer.update(t, tStop)
 
-        #correct nac sign
+
         es_vars.nacs = sign_flipper.correct_nac_sign(es_vars.nacs, es_vars.trans_dips)
 
         #   Second half of Verlet step

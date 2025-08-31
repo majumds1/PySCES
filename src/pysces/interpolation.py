@@ -225,11 +225,11 @@ class SignFlipper():
         for i in range(0, self.n_states):
             for j in range(i+1, self.n_states):
                 flip_detected = False
-                nac_dot_product = np.dot(nac[i,j,:],nac_expol[i,j,:])
+                nac_dot_product = np.dot(nac[i,j,:],nac_expol[i,j,:]) + 1e-10 # add small number to ensure sign(0) = 1
                 # if tdm is available: check if it also flips sign. if not, no correction
                 # if tdm is not available rely only on nac
                 if use_tdm:
-                    tdm_dot_product = np.dot(tdm[i,j,:],tdm_expol[i,j,:])
+                    tdm_dot_product = np.dot(tdm[i,j,:],tdm_expol[i,j,:]) + 1e-10
                     sign_tdm = np.sign(tdm_dot_product)
                     sign_nac = np.sign(nac_dot_product)
                     if sign_tdm == sign_nac:
@@ -247,8 +247,6 @@ class SignFlipper():
                     sign = np.sign(nac_dot_product)
                     if sign < 0:
                         flip_detected = True
-                        # print('FLIP 1: ', sign)
-
                     nac[i,j,:] = sign*nac[i,j,:]
                     nac[j,i,:] = sign*nac[j,i,:]
 

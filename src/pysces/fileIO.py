@@ -15,8 +15,10 @@ from .serialization import serialize, deserialize, TCRunner_Deserialize
 from .common import PhaseVars, ESVars
 from .interpolation import SignFlipper
 from .subroutines import compute_CF_single_LSC, compute_CF_single_SQC
+from .input_simulation import input_local_settings
 
 ANG_2_BOHR = 1.8897259886
+AU_2_FS = 0.02418884264
 
 def _to_symmetric_matrix(data: np.ndarray) -> np.ndarray:
     ''' Convert an array of upper triangular matrix elements to a full symmetric matrix '''
@@ -30,6 +32,7 @@ def _to_symmetric_matrix(data: np.ndarray) -> np.ndarray:
 
 
 def run_restart_module():
+    input_local_settings()
     print('Running restart module')
     arg_parser = argparse.ArgumentParser(description='Run the restart module')
     arg_parser.add_argument('--file',   '-f', type=str,     help='HDF5 file to read', required=True)
@@ -117,16 +120,18 @@ def run_restart_module():
         if 'integrator' in traj_file['electronic']:
             integrator = traj_file['electronic/integrator'][0]
         else:
-            print('Warning: No integrator data found\n         Assuming RK4')
-            integrator = 'RK4'
+            print(f'Warning: No integrator data found\n         Assuming {opts.integrator}')
+            integrator = opts.integrator
 
 
         coord_out = np.concatenate((elec_q, nuc_Q, elec_p, nuc_P))
         sign_flipper = SignFlipper(len(elec_p), 2, len(nuc_Q))
         sign_flipper.nac_hist = nac_hist
 
+        es_vars = ESVars(elecE=elec_E, grads=grads, nacs=nac_mat)
 
-        write_restart(args.output, coord_out, sign_flipper, total_e, times[time_idx], integrator, elec_E, grads, nac_mat, com)
+        write_restart(coord_out, sign_flipper, total_e, times[time_idx], es_vars, 'terachem', None, args.output, integrator, com)
+
 
     exit()
 
@@ -327,6 +332,8 @@ def write_restart(  coord: np.ndarray | list,
             The integrator used to run the simulation
     '''
 
+    print('INTEGRATOR: ', integrator)
+
     #   use default values if not provided
     if integrator is None:
         integrator = opts.integrator
@@ -400,7 +407,7 @@ def write_restart(  coord: np.ndarray | list,
 
         elif extension == '.json':
             coord = np.array(coord).tolist()
-            data = {'time': float(time), 'energy': float(energy), 'integrator': 'rk4'}
+            data = {'time': float(time), 'energy': float(energy), 'integrator': integrator}
             data['elec_q'] = coord[0][0:n_states]
             data['elec_p'] = coord[1][0:n_states]
             data['nucl_q'] = coord[0][n_states:]

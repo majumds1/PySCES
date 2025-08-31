@@ -1557,6 +1557,12 @@ class TCRunner(QCRunner):
         self._log_jobs(job_batch, phase_vars.time)
 
         all_energies, elecE, grad, nac, trans_dips, mu_deriv_matrix = self._extract_results(job_batch)
+
+        print('IN RUN NEW GEOM')
+        for i in range(nac.shape[0]):
+            for j in range(i+1, nac.shape[0]):
+                print('    NAC: ', np.linalg.norm(nac[i,j,:]))
+
         self._initialize_nac_sign(nac)
         self._finalize_frame(job_batch)
 
@@ -2471,7 +2477,8 @@ def format_combo_job_results(job_data: list[dict], states: list[int], ref_dipole
     all_energies = np.array(validated.energy)
     energies = all_energies[states]
 
-    max_s = max(states) + 1
+    # max_s = max(states) + 1
+    max_s = len(all_energies)
     n_states = len(states)
     n_atoms = len(validated.geom)
     gradients = np.zeros((max_s, n_atoms*3))
@@ -2481,7 +2488,8 @@ def format_combo_job_results(job_data: list[dict], states: list[int], ref_dipole
 
     #   extend to lists of None so the following for-loop structure
     #   is compatable with lists of actual arrays
-    max_state = max(states)
+    # max_state = max(states)
+    max_state = max_s - 1
     if validated.cis_gradients is None:
         validated.cis_gradients = [None] *max_state
     if validated.cis_unrelaxed_dipole_deriv is None:
@@ -2540,8 +2548,8 @@ def format_combo_job_results(job_data: list[dict], states: list[int], ref_dipole
     #   make sure the shapes are correctcorrect for sign flips
     if ref_dipole_matrix is not None:
         signs = get_signs_from_dipole_matrix(mu_matrix, ref_dipole_matrix)
-        for i in range(n_states):
-            for j in range(n_states):
+        for i in range(max_s):
+            for j in range(max_s):
                 mu_matrix[i, j]         *= signs[i] * signs[j]
                 mu_deriv_matrix[i, j]   *= signs[i] * signs[j]
                 nacs[i, j]              *= signs[i] * signs[j]
@@ -2552,7 +2560,6 @@ def format_combo_job_results(job_data: list[dict], states: list[int], ref_dipole
         nacs = nacs[states][:, states]
         mu_matrix = mu_matrix[states][:, states]
         mu_deriv_matrix = mu_deriv_matrix[states][:, states]
-    
 
     return (all_energies, energies, gradients, nacs, mu_matrix, mu_deriv_matrix)
 
