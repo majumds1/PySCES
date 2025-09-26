@@ -29,7 +29,7 @@ class Test_debug_runner(unittest.TestCase):
 
         #   check simple panda readable data
         for file in ['corr.txt', 'electric_pq.txt', 'energy.txt', 'grad.txt', 'nac.txt']:
-            data_ref = pandas.read_csv(f'logs_ref/{file}', sep='\s+', comment='#')
+            data_ref = pandas.read_csv(f'ref_logs/{file}', sep='\s+', comment='#')
             data_tst = pandas.read_csv(f'logs/{file}', sep='\s+', comment='#')
             for key in data_ref:
                 np.testing.assert_allclose(data_tst[key], data_ref[key], 
@@ -38,7 +38,7 @@ class Test_debug_runner(unittest.TestCase):
         
         #   check data in xyz formats
         for file in ['nuc_geo.xyz', 'nuclear_P.txt']:
-            data_ref = parse_xyz_data(f'logs_ref/{file}')
+            data_ref = parse_xyz_data(f'ref_logs/{file}')
             data_tst = parse_xyz_data(f'logs/{file}')
             for frame, (frame_tst, frame_ref) in enumerate(zip(data_tst, data_ref)):
                 np.testing.assert_equal(frame_tst['atoms'], frame_ref['atoms'])
