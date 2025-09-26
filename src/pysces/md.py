@@ -179,6 +179,9 @@ def rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
 
 def verlet_main(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
 
+    if opts.incremental_int:
+        return rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat)
+
     #   Initialize variables
     qc_runner = opts.qc_runner
     nel = opts.nel
