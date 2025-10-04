@@ -16,6 +16,8 @@ from pysces import input_simulation as opts
 from subprocess import Popen
 from typing import Callable
 import numpy as np
+
+_plugins = []
 class TCRunnerOptions:
     #   TeraChem runner options
     host: str
@@ -101,7 +103,7 @@ restart_file_out = 'restart.json'
 
 #   type of QC runner, either 'gamess' or 'terachem'
 qc_runner: str | Callable[[list], int] = 'gamess'
-#QC_RUNNER = 'terachem'
+qc_runner_opts: dict = {}
 
 #   TeraChem runner options
 tcr_host = '10.1.1.154'
@@ -189,6 +191,10 @@ def input_local_settings(**kwargs):
     '''
         Load in settings from the local input file
     '''
+    global _plugins
+    from pysces.plugins import load_plugins
+    _plugins = load_plugins()
+
     if os.path.isfile('input_simulation_local.py'):
         print("Loading local settings")
         local_lines = []
@@ -230,6 +236,7 @@ def make_logging_dir():
     os.makedirs(opts.logging_dir)
 
 def _check_settings(local: dict):
+    global _plugins
     opts.nnuc = 3*opts.natom # number of nuclear DOFs
     opts.ndof = opts.nel + opts.nnuc 
 
@@ -255,6 +262,8 @@ def _check_settings(local: dict):
         elif k.startswith('fname_'):
             tc_runner_opts.__dict__[k] = v
 
+    if opts.qc_runner == 'gamess':
+        pass
     if opts.qc_runner == 'terachem':
         max_state = tc_runner_opts.state_options.get('max_state', False)
         grads = tc_runner_opts.state_options.get('grads', False)
@@ -279,6 +288,27 @@ def _check_settings(local: dict):
             print(f"         Resetting q0 and p0 to all zeros")
             opts.q0 = [0.0]*opts.nel
             opts.p0 = [0.0]*opts.nel
+    else:
+        #   Make sure the qc_runner is a valid plugin
+        if opts.qc_runner not in _plugins:
+            available_plugins = ', '.join(_plugins.keys())
+            print(f'QC Runner "{opts.qc_runner}" not found in plugins.')
+            print(f"Available plugins: {available_plugins}")
+            sys.exit()
+
+        opts_variable_name = opts.qc_runner.lower() + '_opts'
+        qc_runner_opts = getattr(opts, opts_variable_name, {})
+        if not isinstance(qc_runner_opts, dict):
+            print(f'QC Runner options variable "{opts_variable_name}" is not a dictionary.')
+            print("Please define it as a dictionary of options for the QC runner.")
+            sys.exit()
+        elif len(qc_runner_opts) == 0:
+            print(f'WARNING: QC Runner options variable "{opts_variable_name}" is an empty dictionary.')
+            print("         If this is intended, you can ignore this warning.")
+        
+
+        opts.qc_runner = _plugins[opts.qc_runner](**qc_runner_opts)
+
 
     if integrator.lower() not in ['abm', 'bsh', 'rk4', 'rk4-uprop', 'verlet-uprop']:
         raise ValueError(f"Integrator '{integrator}' is not supported. Choose from 'ABM', 'BSH', 'RK4', 'RK4-Uprop', or 'Verlet-Uprop'")

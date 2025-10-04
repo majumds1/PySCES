@@ -1,4 +1,5 @@
 from pysces.qcRunners.DebugRunner import DebugRunner
+import numpy as np
 
 #   number of atoms in the molecule
 natom = 2
@@ -23,3 +24,12 @@ input_seed = 123456
 hdf5_logging = True
  
 logging_mode = 'w'
+
+
+debug_runner_opts = {
+    'atoms': ['H', 'H'],
+    'xyz': np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+    'hessian_vecs': np.zeros((2, 2)),
+    'freq': np.ones(6) * 3000,
+    'reduced_mass': np.ones(6)
+}

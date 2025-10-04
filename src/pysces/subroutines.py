@@ -73,7 +73,8 @@ def get_geo_hess():
     elif mol_input_format == "gamess":
         amu_mat, xyz_ang, frq, redmas, L, U, atom_number_mat = get_geo_hess_gamess()
     else:
-        amu_mat, xyz_ang, frq, U, atom_number_mat = qc_runner.get_geoo_hess({})
+        print(type(qc_runner))
+        amu_mat, xyz_ang, frq, U, atom_number_mat = qc_runner.get_geo_hess()
         redmas = None
         L = None
 
@@ -1889,7 +1890,6 @@ def incremental_integrate(yvar: list, t: float, dt: float, au_mas: np.ndarray, e
         t_n = t + n * sub_dt
         P_points.append(y_var_new[ndof:][nel:])
         elecE, grads, nacs = eval_func(t_n, y_var_new)
-        print('TIME: ', t_n)
         
         if integrator.lower() == 'rk4':
             # P_points.append(y_var_new[ndof:][nel:])
