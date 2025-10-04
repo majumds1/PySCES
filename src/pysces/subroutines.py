@@ -57,26 +57,6 @@ def set_subroutine_globals():
     for k, v in opts.__dict__.items():
         globals()[k] = v
 
-def _dict_to_geo_hess(data: dict):
-    atomic_symbols = data.get('atoms')
-    xyz_ang = np.array(data.get('xyz')).reshape((-1, 1))
-    hessian_vecs = data.get('hessian_vecs')
-    frq = np.array(data.get('freq')) * 2.0*pi*clight*100*autime2s*frq_scale
-    redmas = data.get('reduced_mass')
-    L = np.zeros_like(hessian_vecs)
-    U = np.zeros_like(hessian_vecs)
-
-    # TODO: Debug
-    U = np.zeros((7, 6))
-    U[-1:] = np.array([[1, 0, 0, -1, 0, 0]])
-
-    amu_masses = [qcel.periodictable.to_mass(sym) for sym in atomic_symbols for _ in range(3)]
-    amu_mat = np.diag(amu_masses)
-    atom_number_mat = [] # not necesary for non-GAMESS runners
-
-    return(amu_mat, xyz_ang, frq, redmas, L, U, atom_number_mat)
-
-
 #####################################################
 ### Read geometry & hessian file, returns 
 ### 1. AMU matrix
@@ -93,10 +73,9 @@ def get_geo_hess():
     elif mol_input_format == "gamess":
         amu_mat, xyz_ang, frq, redmas, L, U, atom_number_mat = get_geo_hess_gamess()
     else:
-        data = qc_runner.get_molecule_props({})
-        amu_mat, xyz_ang, frq, redmas, L, U, atom_number_mat = _dict_to_geo_hess(data)
-    # else:
-    #     raise ValueError('mol_input_format must be either "terachem" or "gamess"; got "{}"'.format(mol_input_format))
+        amu_mat, xyz_ang, frq, U, atom_number_mat = qc_runner.get_geoo_hess({})
+        redmas = None
+        L = None
 
     return(amu_mat, xyz_ang, frq, redmas, L, U, atom_number_mat)
 
