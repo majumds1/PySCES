@@ -13,8 +13,9 @@ def load_plugins():
         success_msg = 'Success'
         try:
             plugins[ep.name] = ep.load()
-        except:
+        except Exception as e:
             success_msg = 'Failed'
+            print(f'Error loading plugin {ep.name}: {e}')
         print(f'    {ep.name + ":":20s} {ep.value:40s} {success_msg}')
     
     print('-'*80)

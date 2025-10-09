@@ -200,7 +200,6 @@ def input_local_settings(**kwargs):
         local_lines = []
         with open('input_simulation_local.py', 'r') as f:
             local_lines = f.read()
-        locals = {}
 
         try:
             exec(local_lines, globals())
@@ -214,7 +213,7 @@ def input_local_settings(**kwargs):
         for k, v in kwargs.items():
             globals()[k] = v
 
-    _check_settings(locals)
+    _check_settings()
     _set_seed()
 
 def make_logging_dir():
@@ -235,15 +234,15 @@ def make_logging_dir():
             raise RecursionError('logging dir already eists, cou not copy to new numbered dir')
     os.makedirs(opts.logging_dir)
 
-def _check_settings(local: dict):
+def _check_settings():
     global _plugins
     opts.nnuc = 3*opts.natom # number of nuclear DOFs
     opts.ndof = opts.nel + opts.nnuc 
 
     #   legacy settings
-    if 'q0' not in local:
+    if 'q0' not in globals():
         opts.q0 = [0.0]*nel
-    if 'p0' not in local:
+    if 'p0' not in globals():
         opts.p0 = [0.0]*nel
     if 'QC_RUNNER' in globals():
         opts.qc_runner = globals()['QC_RUNNER']
@@ -307,7 +306,7 @@ def _check_settings(local: dict):
             print("         If this is intended, you can ignore this warning.")
         
 
-        opts.qc_runner = _plugins[opts.qc_runner](**qc_runner_opts)
+        opts.qc_runner = _plugins[opts.qc_runner](qc_runner_opts)
 
 
     if integrator.lower() not in ['abm', 'bsh', 'rk4', 'rk4-uprop', 'verlet-uprop']:
