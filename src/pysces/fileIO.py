@@ -815,7 +815,7 @@ class CorrelationLogger(BaseLogger):
         
         ### Compute the estimator of electronic state population ###
         if opts.debug_eff_wigner_nel > len(q):
-            print(f'DEBUG: Using {opts.debug_eff_wigner_nel} effective Wigner states')
+            print(f'Correlation Logger: Using {opts.debug_eff_wigner_nel} effective Wigner states')
             nel = opts.debug_eff_wigner_nel
             n_diff = nel - len(q)
             p = np.concatenate((p, np.zeros(n_diff)))

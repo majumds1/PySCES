@@ -1954,9 +1954,10 @@ def integrate_rk4_main(yvar, dt, au_mas, t, es_history, es_vars: ESVars):
 
 def compute_CF_single_LSC(q, p):
    ### Compute the estimator of electronic state population ###
-   pop = np.zeros(nel)
+   dim = max(opts.debug_eff_wigner_nel, opts.nel)
+   pop = np.zeros(dim)
 
-   common_TCF = 2**(nel+1) * np.exp(-np.dot(q, q) - np.dot(p, p))
+   common_TCF = 2**(dim+1) * np.exp(-np.dot(q, q) - np.dot(p, p))
    for i in range(nel):
         final_state_TCF = q[i]**2 + p[i]**2 - 0.5
         pop[i] = common_TCF * final_state_TCF
