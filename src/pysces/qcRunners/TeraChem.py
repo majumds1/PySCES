@@ -3,6 +3,18 @@ from __future__ import annotations
 from tcpb import TCProtobufClient as TCPBClient
 from tcpb.exceptions import ServerError
 from tcpb import terachem_server_pb2 as pb
+# --- Fix for modern qcio versions (>=0.11) which removed the `constants` module ---
+#try:
+#    from qcio import constants
+#except ImportError:
+#    import numpy as np
+#    class constants:
+#        """Fallback physical constants for PySCES when qcio.constants is missing"""
+#        hartree_to_ev = 27.211386245988
+#        ev_to_hartree = 1.0 / hartree_to_ev
+#        bohr_to_angstrom = 0.529177210903
+#        angstrom_to_bohr = 1.0 / bohr_to_angstrom
+# --- End patch ---
 
 from pysces.input_simulation import logging_dir, TCRunnerOptions
 from pysces.common import PhaseVars, QCRunner, ESVars
@@ -1533,7 +1545,7 @@ class TCRunner(QCRunner):
     def run_new_geom(self, phase_vars: PhaseVars=None, geom=None):
 
         if phase_vars is not None:
-            geom = phase_vars.nuc_q*qcel.constants.bohr2angstroms
+            geom = phase_vars.nuc_q*0.529
         elif geom is not None:
             #   legacy support for geom, assumed to be in angstroms
             pass
