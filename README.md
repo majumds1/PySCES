@@ -9,3 +9,18 @@ References for the most recent implementation will be added as they become avail
 Created by Christopher Myers, Ken Miyazaki, and Thomas Werner Trepl.
 
 Disclaimer: The code contained in this package has been written, edited, and used by members of the Ananth group at Cornell University and the Isborn group at the University of California, Merced. It has not been formally reviewed, nor published, nor are there copyrights. Bugs and errors may be present.
+
+
+# For running trajectories on Pinnacles cluster UCM,
+ Steps :
+  
+ 1) Setup no_cavity traj directories :  bash setup.sh  (ensure to have correct input file and slurm script in the same directory, examples provided in repo)
+ 2) Submit trajectories : bash submit.sh [submits a bunch of slurm jobs]
+ 3) Get list of random input seeds used : bash get_seed.sh [stores no_cavity seeds in file seed.out]
+ 4) Copy over list of no_cavity input seeds to cavity traj directory
+ 5) Setup cavity traj directories : bash setup_cavity.sh (ensure to have correct input file and slurm script in the same directory, examples provided in repo)
+ 6) Get list of new input seeds used : bash get_seed_new.sh [stores cavity seeds in file seed_new.out]
+ 7) Verify that the cavity and no_cavity input seeds match
+ 8) Submit trajectories : bash submit.sh [submits a bych of slurm jobs]
+ 
+ Note : Make sure to modify the trajectory numbers in all scripts according to your requirements. 
