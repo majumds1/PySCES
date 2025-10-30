@@ -29,6 +29,7 @@ tcr_job_options = {
         'restricted': True,
         'precision': 'mixed',
         'convthre': 1E-6,
+        'maxit': 300,
 
         #   TD-DFT
         'cis': 'yes',
