@@ -9,4 +9,5 @@ do
 	pwd
 	sbatch run.slurm
 	cd ..
+	sleep 3
 done
