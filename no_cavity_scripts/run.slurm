@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name="short"  #  Please attempt to give the job a descriptive name
-#SBATCH --partition=gpu
+#SBATCH --partition=gpu,pi.cisborn,cenvalarc.gpu
 #SBATCH --nodes=1                    # must be 1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1                    # max 4.5 times the number of tasks per node
