@@ -23,4 +23,4 @@ Disclaimer: The code contained in this package has been written, edited, and use
  7) Verify that the cavity and no_cavity input seeds match
  8) Submit trajectories : bash submit.sh [submits a bych of slurm jobs]
  
- Note : Make sure to modify the trajectory numbers in all scripts according to your requirements. 
+ Note : Make sure to modify the trajectory numbers in all scripts according to your requirements. For restart, change the integrator in restart.json to 'rk4'
