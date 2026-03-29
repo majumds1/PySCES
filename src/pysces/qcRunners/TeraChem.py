@@ -37,15 +37,18 @@ import itertools
 from collections import deque
 import qcelemental as qcel
 import base64
-from pprint import pprint
 
+def str_to_bool(s):
+    return s.strip().lower() in ('1', 'true', 'yes')
 
 _server_processes = {}
 
 #   debug flags
-_DEBUG = bool(int(os.environ.get('DEBUG', False))) # used with numerical derivatives
+_DEBUG = str_to_bool(os.environ.get('DEBUG', 'False')) # used with numerical derivatives
 _DEBUG_LOAD_TRAJ = os.environ.get('DEBUG_LOAD_TRAJ', False)
 _DEBUG_SAVE_TRAJ = os.environ.get('DEBUG_SAVE_TRAJ', False)
+if any([_DEBUG, _DEBUG_LOAD_TRAJ, _DEBUG_SAVE_TRAJ]):
+    print('### DEBUG MODE ENABLED ###')
 
 
 def synchronized(function):
@@ -969,7 +972,7 @@ class TCJobBatch():
         return timings
 
 class TCRunner(QCRunner):
-    def __init__(self, atoms: list[str], tc_opts: TCRunnerOptions, max_wait=20) -> None:
+    def __init__(self, atoms: list[str], tc_opts: TCRunnerOptions, max_wait=20, server_disabled=False) -> None:
         super().__init__()
         
         # Atoms and max_wait
@@ -980,6 +983,7 @@ class TCRunner(QCRunner):
         self._hosts = tc_opts.host
         self._ports = tc_opts.port
         self._server_roots = tc_opts.server_root
+        self._server_disabled = server_disabled
         self._prepare_server_info()  # Validate and process server information
 
         # Job-related options
@@ -1272,7 +1276,7 @@ class TCRunner(QCRunner):
             #     print('DEBUG_TRAJ set, TeraChem clients will not be opened')
             #     break
 
-            if _DEBUG_LOAD_TRAJ:
+            if _DEBUG_LOAD_TRAJ or self._server_disabled:
                 client = TCCLientExtraDebug(h, p, s)
             else:
                 client = TCClientExtra(host=h, port=p, server_root=s)
@@ -1360,7 +1364,7 @@ class TCRunner(QCRunner):
         if _DEBUG_SAVE_TRAJ:
             with open(_DEBUG_SAVE_TRAJ, 'wb') as file:
                 pickle.dump(self._debug_traj, file)
-        if _DEBUG_LOAD_TRAJ:
+        if _DEBUG_LOAD_TRAJ or self._server_disabled:
             return
         for client in self._client_list:
             client.disconnect()

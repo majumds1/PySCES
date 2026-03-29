@@ -10,7 +10,7 @@ Created on Wed May  3 19:05:28 2023
 Repository of simulation variables
 """
 import os
-import sys
+import traceback
 import shutil
 from pysces import input_simulation as opts
 from subprocess import Popen
@@ -200,8 +200,9 @@ def input_local_settings(**kwargs):
             exec(local_lines, globals())
 
         except Exception as e:
-            print("Error loading local settings: ", e)
-            return
+            print("Error loading local settings: ")
+            print(traceback.format_exc())
+            raise e
         
     if len(kwargs) > 0:
         #   if there are any kwargs, we will update the locals with them
