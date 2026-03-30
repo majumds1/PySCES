@@ -76,7 +76,6 @@ class TCClientExtra(TCPBClient):
             log (bool): Whether to enable logging. Defaults to True.
         """
         
-        
         self._log = None
         if log and os.path.isdir(logging_dir):
             log_file_loc = os.path.join(logging_dir, f'{host}_{port}.log')
@@ -1277,7 +1276,7 @@ class TCRunner(QCRunner):
             #     break
 
             if _DEBUG_LOAD_TRAJ or self._server_disabled:
-                client = TCCLientExtraDebug(h, p, s)
+                client = TCCLientExtraDebug(h, p, debug=True, server_root=s)
             else:
                 client = TCClientExtra(host=h, port=p, server_root=s)
             client.startup(max_wait=self._max_wait)
