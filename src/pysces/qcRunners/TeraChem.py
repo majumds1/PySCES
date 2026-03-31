@@ -491,6 +491,7 @@ class TCClientExtra(TCPBClient):
             results['tc.out'] = lines
         else:
             print("Warning: Output file not found at ", output_file)
+            results['tc.out'] = []
 
     def clean_up_stale_files(self):
         for file in ['exciton.dat', 'exciton_overlap.dat', 'exciton_overlap.dat.1']:
@@ -573,7 +574,16 @@ class TCCLientExtraDebug(TCClientExtra):
     def compute_job(self, job: TCJob, append_tc_out=False, use_guess_files=True, start_fresh=False):
         print('DEBUG MODE: Computing job')
 
-        results = self.debug_data[job.jobID].results
+        fake_results = {
+            'energy': -75.0,
+            'grad': np.zeros_like(job.geom).tolist(),
+            'job_dir': f'{job.job_type}_dir',
+            'orbfile': f'{job.job_type}_orbfile',
+        }
+        if job.jobID not in self.debug_data:
+            results = fake_results
+        else:
+            results = self.debug_data[job.jobID].results
 
         if start_fresh:
             self.clean_up_stale_files()
@@ -744,7 +754,7 @@ def _start_TC_server(port: int):
 
 class TCJob():
     __job_counter = 0
-    def __init__(self, geom, opts, job_type, excited_type, state, name='', client=None) -> None:
+    def __init__(self, geom: np.ndarray, opts: dict, job_type: str, excited_type: str, state: 0, name='', client=None) -> None:
         self.geom = np.array(geom)
         self.excited_type: Literal['cas', 'cis'] = excited_type
         self.opts = dict(opts)
@@ -759,7 +769,7 @@ class TCJob():
         if job_type not in ['energy', 'gradient', 'coupling']:
             raise ValueError('TCJob job_type must be either "energy", "gradient", or "coupling"')
 
-        assert self.excited_type in ('cas', 'cis')
+        assert self.excited_type in ('cas', 'cis'), 'TCJob excited_type must be either "cas" or "cis"'
 
         TCJob.__job_counter += 1
         self.__jobID = TCJob.__job_counter
@@ -1403,6 +1413,7 @@ class TCRunner(QCRunner):
             results['tc.out'] = lines
         else:
             print("Warning: Output file not found at ", output_file)
+            results['tc.out'] = []
         return results
     
     @staticmethod
