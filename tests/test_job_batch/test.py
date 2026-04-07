@@ -80,12 +80,13 @@ if __name__ == "__main__":
             'cisconvtol': 1e-5,
             'cismaxiter': 500,
     }
-    tc_runner_opts = TCRunnerOptions()
-    tc_runner_opts.state_options = {'grads': [1, 2, 3]}
-    tc_runner_opts.job_options = tcr_job_options
-    tc_runner_opts.host = ['localhost']*2
-    tc_runner_opts.port = [12345, 12346]
-    tc_runner_opts.server_root = ['/tmp/server1', '/tmp/server2']
+    tc_runner_opts = TCRunnerOptions(
+        host=['localhost']*2,
+        port=[12345, 12346],
+        server_root=['/tmp/server1', '/tmp/server2'],
+        job_options=tcr_job_options,
+        state_options={'grads': [0, 1, 2, 3]}
+    )
     mol = Molecule.from_file('mol.xyz')
     tc_runner = TCRunner(mol.symbols.tolist(), tc_runner_opts, server_disabled=True)
     job_batch = tc_runner.create_jobs(mol.geometry, False, (1,2,3), ((1, 2), (2, 3), (1, 3)))

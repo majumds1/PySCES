@@ -16,11 +16,15 @@ from pysces import input_simulation as opts
 from subprocess import Popen
 from typing import Callable
 import numpy as np
-class TCRunnerOptions:
+# from dataclasses import dataclass, field
+from pydantic import BaseModel
+
+
+class TCRunnerOptions(BaseModel):
     #   TeraChem runner options
-    host: str
-    port: int
-    server_root: str
+    host: str | list[str]
+    port: int | list[int]
+    server_root: str | list[str]
     job_options: dict = {}
     state_options: dict = {
         'max_state': 1, 'grads': 'all'
@@ -54,7 +58,6 @@ class TCRunnerOptions:
     #   sometimes nacs can have different signs,
     #   this is a reference for the first frame
     _initial_ref_nacs = None
-
 
 ########## DEFAULT SETTINGS ##########
 
@@ -166,7 +169,7 @@ debug_eff_wigner_nel = -1
 
 
 ########## GLOBAL SETTINGS, SHOULD NOT BE SET BY USER ##########
-tc_runner_opts = TCRunnerOptions()
+tc_runner_opts = TCRunnerOptions(host=tcr_host, port=tcr_port, server_root=tcr_server_root)
 _set_defaults = False
 defaults = {}
 if not _set_defaults:
