@@ -1342,6 +1342,9 @@ class TCRunner(QCRunner):
             for k, v in self._initial_frame_options.items():
                 print(f'    {k + " ":.<24s} {v}')
 
+        if self.combine_jobs:
+            return
+        
         print('\n TC Gradient Specific Options:')
         for k, v in self.grad_job_options.items():
             print(f'    {k}:')
@@ -1649,13 +1652,15 @@ class TCRunner(QCRunner):
         else:
             raise NotImplementedError('Interpolation of gradients and NACs is not yet implemented')
 
-    def create_jobs(self, geom, energy_only = False, grads = [], nacs = [], dipoles = [], tr_dipoles = []):
+    def create_jobs(self, geom, energy_only = False, grads = [], nacs = [], dipoles = [], tr_dipoles = [], fragment_idx = None):
         if self._combine_jobs:
-            return self._create_jobs_bulk(geom, energy_only, grads, nacs, dipoles, tr_dipoles)
+            return self._create_jobs_bulk(geom, self._client_list, energy_only, grads, nacs, dipoles, tr_dipoles)
         else:
-            return self._create_jobs_singles(geom, energy_only, grads, nacs)
+            job_batch =  self._create_jobs_singles(geom, energy_only, grads, nacs)
+            self._assign_clients_equally(job_batch)
+            return job_batch
 
-    def _create_jobs_bulk(self, geom, energy_only = False, grads: list[int]=[], nacs: list[int, int]=[], dipoles: list[int]=[], tr_dipoles: list[int, int]=[]):
+    def _create_jobs_bulk(self, geom, client_list: list[TCClientExtra], energy_only = False, grads: list[int]=[], nacs: list[int, int]=[], dipoles: list[int]=[], tr_dipoles: list[int, int]=[]):
 
         if self._excited_type != 'cis':
             raise ValueError('Bulk jobs are only supported for CIS excited state calculations')
@@ -1664,11 +1669,11 @@ class TCRunner(QCRunner):
 
         #   run the job balancing algorithm
         es_tasks = ESDerivTasks(grads, nacs, dipoles, tr_dipoles)
-        balanced = balance_tasks_optimum(self._task_benchmarks, es_tasks, len(self._client_list))
-        self._tc_client_assignments = [[f'combo_{i}'] for i in range(len(self._client_list))]
+        balanced = balance_tasks_optimum(self._task_benchmarks, es_tasks, len(client_list))
+        self._tc_client_assignments = [[f'combo_{i}'] for i in range(len(client_list))]
 
         #   distribute the balanced tasks across all clients
-        for i, client in enumerate(self._client_list):
+        for i, client in enumerate(client_list):
             client_tasks = balanced[i]
             job = TCJob(geom, self._base_options, 'energy', self._excited_type, 0, name=f'combo_{i}')
             prop_file_contents = ''
@@ -1712,6 +1717,7 @@ class TCRunner(QCRunner):
             self._apply_initial_frame_options(job)
             client.set_file('cispropertyfile', prop_file_contents, 'w')
             job.opts['cispropertyfile'] = client.get_file_loc('cispropertyfile')
+            job.client = client
 
             job_batch.append(job)
 
@@ -1837,6 +1843,7 @@ class TCRunner(QCRunner):
                 pickle.dump(self._debug_traj, file)
 
     def _assign_clients_by_request(self, jobs_batch: TCJobBatch):
+        raise DeprecationWarning('Client assignment by request is deprecated and will be removed in a future release. Please use the bulk job creation method instead.')
         all_job_names = [j.name for j in jobs_batch.jobs]
         clients_IDs_for_other = []
 
@@ -1874,10 +1881,10 @@ class TCRunner(QCRunner):
         # if debug_batch is not None: 
         #     return debug_batch
         
-        if len(self._tc_client_assignments) > 0:
-            self._assign_clients_by_request(jobs_batch)
-        else:
-            self._assign_clients_equally(jobs_batch)
+        # if len(self._tc_client_assignments) > 0:
+        #     self._assign_clients_by_request(jobs_batch)
+        # else:
+        #     self._assign_clients_equally(jobs_batch)
 
         if not jobs_batch.check_client():
             raise ValueError('Not all jobs have been assigned a client')
