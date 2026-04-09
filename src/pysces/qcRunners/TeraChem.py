@@ -1575,15 +1575,10 @@ class TCRunner(QCRunner):
 
         all_energies, elecE, grad, nac, trans_dips, mu_deriv_matrix = self._extract_results(job_batch)
 
-        print('IN RUN NEW GEOM')
-        for i in range(nac.shape[0]):
-            for j in range(i+1, nac.shape[0]):
-                print('    NAC: ', np.linalg.norm(nac[i,j,:]))
-
         self._initialize_nac_sign(nac)
         self._finalize_frame(job_batch)
 
-        return ESVars(None, all_energies, elecE, grad, nac, trans_dips, job_batch.timings)
+        return ESVars(None, all_energies, elecE, grad, nac, trans_dips=trans_dips, timings=job_batch.timings)
         # return (all_energies, elecE, grad, nac, trans_dips, job_batch.timings)
     
     # def set_logger():

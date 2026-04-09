@@ -332,8 +332,6 @@ def write_restart(  coord: np.ndarray | list,
             The integrator used to run the simulation
     '''
 
-    print('INTEGRATOR: ', integrator)
-
     #   use default values if not provided
     if integrator is None:
         integrator = opts.integrator
