@@ -4,7 +4,7 @@ import sys
 
 from pysces.fileIO import SimulationLogger, write_restart, read_restart
 from pysces.interpolation import SignFlipper
-from pysces.common import PhaseVars, ESVarsHistory, ESVars
+from pysces.common import PhaseVars, ESVarsHistory, ESVars, QCRunner
 from pysces import timers
 from pysces import input_simulation as opts
 from pysces.subroutines import (
@@ -26,7 +26,7 @@ from pysces.input_gamess import nacme_option as opt
 def rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
 
     #   Initialize variables
-    qc_runner = opts.qc_runner
+    qc_runner: QCRunner | str = opts.qc_runner
     nel = opts.nel
     natom = opts.natom
     nnuc = 3 * natom
@@ -51,6 +51,9 @@ def rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
     atoms = get_atom_label()
     logger.atoms = atoms
 
+    if isinstance(qc_runner, str) and qc_runner not in ['terachem', 'gamess']:
+        raise ValueError('QCRunner must be one of "terachem", "gamess", or <class QCRunner>')
+
     if qc_runner == 'terachem':
         from pysces.qcRunners.TeraChem import TCRunner
         logger.state_labels = [f'S{x}' for x in opts.tcr_state_options['grads']]
@@ -59,6 +62,7 @@ def rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         if opts.tcr_log_jobs:
             tc_runner.set_logger_file(logger._h5_file)
     elif qc_runner != 'gamess':
+        assert isinstance(qc_runner, QCRunner)
         qc_runner.set_logger_file(logger._h5_file)
 
     #   Initialization
@@ -183,7 +187,7 @@ def verlet_main(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         return rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat)
 
     #   Initialize variables
-    qc_runner = opts.qc_runner
+    qc_runner: str | QCRunner = opts.qc_runner
     nel = opts.nel
     natom = opts.natom
     nnuc = 3 * natom
@@ -209,6 +213,9 @@ def verlet_main(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
     atoms = get_atom_label()
     logger.atoms = atoms
 
+    if isinstance(qc_runner, str) and qc_runner not in ['terachem', 'gamess']:
+        raise ValueError('QCRunner must be one of "terachem", "gamess", or <class QCRunner>')
+
     if qc_runner == 'terachem':
         from pysces.qcRunners.TeraChem import TCRunner
         logger.state_labels = [f'S{x}' for x in opts.tcr_state_options['grads']]
@@ -217,6 +224,7 @@ def verlet_main(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         if opts.tcr_log_jobs:
             tc_runner.set_logger_file(logger._h5_file)
     elif qc_runner != 'gamess':
+        assert isinstance(qc_runner, QCRunner)
         qc_runner.set_logger_file(logger._h5_file)
 
     #   Initialization
