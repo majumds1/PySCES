@@ -86,6 +86,7 @@ class TCClientExtra(TCPBClient):
         self._last_known_curr_dir = None
         self._results_history = deque(maxlen=10)
         self._exciton_overlap_data = None
+        self._exciton_overlap = None
         self._exciton_data = None
         self._scf_guess_file = None
         self._cas_guess_file = None
@@ -232,17 +233,14 @@ class TCClientExtra(TCPBClient):
         scf_guess, cis_guess, cas_guess = self.get_guess_file_locs(prev_results_hist)
         guess_data = {}
         if os.path.isfile(str(cas_guess)):
-            with open(cas_guess, 'rb') as file:
-                data = file.read()
-                guess_data['casguess'] = base64.b64encode(data).decode('utf-8')
+            data = self.get_file(cas_guess, 'rb')
+            guess_data['casguess'] = base64.b64encode(data).decode('utf-8')
         if os.path.isfile(str(scf_guess)):
-            with open(scf_guess, 'rb') as file:
-                data = file.read()
-                guess_data['scfguess'] = base64.b64encode(data).decode('utf-8')
+            data = self.get_file(scf_guess, 'rb')
+            guess_data['scfguess'] = base64.b64encode(data).decode('utf-8')
         if os.path.isfile(str(cis_guess)):
-            with open(cis_guess, 'rb') as file:
-                data = file.read()
-                guess_data['cisguess'] = base64.b64encode(data).decode('utf-8')
+            data = self.get_file(cis_guess, 'rb')
+            guess_data['cisguess'] = base64.b64encode(data).decode('utf-8')
 
     def set_guess_files_from_job(self, prev_job: TCJob):
         '''
@@ -331,8 +329,7 @@ class TCClientExtra(TCPBClient):
             print(job_dir)
             return
 
-        with open(tc_out_file_loc, 'r') as file:
-            lines = file.readlines()
+        lines = self.get_file(tc_out_file_loc, 'r').splitlines()
         print('End of tc.out file at:')
         print(job_dir)
         print('\n START OF FILE .... \n')
@@ -460,15 +457,15 @@ class TCClientExtra(TCPBClient):
                         data = [float(x) for x in sp[1:]]
                         overlap_data.append(data)
                 overlap_data = np.array(overlap_data)
-                self._exciton_data = overlap_data
+                self._exciton_overlap = overlap_data
                 results['exciton_overlap'] = overlap_data
                 self.remove_file('exciton.dat')
+                self.remove_file('exciton_overlap.dat.1')
             else:
                 #   exciton_overlap.dat exists but exciton_overlap.dat.1 does not
                 #   this occus the first time exciton_overlap.dat is read by TeraChem, so we
                 #   assume that it's the first frame that does so. 
                 pass
-            self.rename_file('exciton_overlap.dat', 'exciton_overlap.dat.1')
 
             if opts.get('cisrestart', None):
                 self._possible_files_to_remove.add(opts.get('cisrestart', None))
@@ -483,11 +480,10 @@ class TCClientExtra(TCPBClient):
     def _append_output_file(self, results: dict):
         output_file = os.path.join(self.server_root, results['job_dir'], 'tc.out')
         if os.path.isfile(output_file):
-            with open(output_file, 'r') as file:
-                lines = file.readlines()
+            lines = self.get_file(output_file, 'r').splitlines()
             #   remove line breaks
             for n in range(len(lines)):
-                lines[n] = lines[n][0:-1]
+                lines[n] = lines[n].rstrip('\n')
             results['tc.out'] = lines
         else:
             print("Warning: Output file not found at ", output_file)
@@ -538,6 +534,7 @@ class TCClientExtra(TCPBClient):
         return data
 
     def set_file(self, file_name, data, mode='wb'):
+        print('SETTING FILE: ', file_name)
         file_loc = self._convert_file_path(file_name)
             
         with open(file_loc, mode) as file:
@@ -987,6 +984,7 @@ class TCRunner(QCRunner):
         # Atoms and max_wait
         self._atoms = tuple(atoms)
         self._max_wait = max_wait
+        self._name = tc_opts.name
 
         # Hosts, ports, and server roots
         self._hosts = tc_opts.host
@@ -1048,7 +1046,6 @@ class TCRunner(QCRunner):
         # Print options summary
         self._print_options_summary()
         self._coordinate_exciton_overlap_files(tc_opts.fname_exciton_overlap_data)
-        # time.sleep(60)
 
         #   interpolation options
         self._interpolate_grads = False
@@ -1201,7 +1198,7 @@ class TCRunner(QCRunner):
                 excited_options['cassinglets'] = max_state + 1
 
         if max_state > 0 and excited_type == 'cis':
-            excited_options['cisrestart'] = 'cis_restart_' + str(os.getpid())
+            excited_options['cisrestart'] = 'cis_restart_' + str(os.getpid()) + f'_{self._name}'*(self._name is not None)
         base_options['purify'] = False
         base_options['atoms'] = self._atoms
 
@@ -1230,7 +1227,6 @@ class TCRunner(QCRunner):
                 if self._excited_type == 'cis':
                     job_opts.update(excited_options)
                     job_opts['cistarget'] = state
-                    job_opts['cisexcitonoverlap'] = 'yes'
 
             self.grad_job_options[name] = job_opts
 
@@ -1245,7 +1241,6 @@ class TCRunner(QCRunner):
             if self._excited_type == 'cis':
                 job_opts.update(excited_options)
                 job_opts['cistarget'] = state
-                job_opts['cisexcitonoverlap'] = 'yes'
             elif self._excited_type == 'cas':
                 job_opts.update(excited_options)
                 job_opts['castarget'] = state
@@ -1419,6 +1414,7 @@ class TCRunner(QCRunner):
             results['tc.out'] = []
         return results
     
+    #   TODO: Move to TCClientExtra
     @staticmethod
     def remove_previous_job_dir(client: TCClientExtra):
         results = client.prev_results
@@ -1426,6 +1422,7 @@ class TCRunner(QCRunner):
         job_dir = results['job_dir']
         shutil.rmtree(job_dir)
 
+    #   TODO: Move to TCClientExtra
     @staticmethod
     def remove_previous_scr_dir(client: TCClientExtra):
         results = client.prev_results
@@ -1710,8 +1707,9 @@ class TCRunner(QCRunner):
             job.opts.update(self._excited_options)
 
             self._apply_initial_frame_options(job)
-            client.set_file('cispropertyfile', prop_file_contents, 'w')
-            job.opts['cispropertyfile'] = client.get_file_loc('cispropertyfile')
+            cis_prop_file_name = f'cispropertyfile' + f'_{self._name}'*(self._name is not None)
+            client.set_file(cis_prop_file_name, prop_file_contents, 'w')
+            job.opts['cispropertyfile'] = client.get_file_loc(cis_prop_file_name)
             job.client = client
 
             job_batch.append(job)
@@ -1883,6 +1881,11 @@ class TCRunner(QCRunner):
 
         if not jobs_batch.check_client():
             raise ValueError('Not all jobs have been assigned a client')
+        
+        #   make sure exciton overlap data is on all clients before running jobs
+        for client in self._client_list:
+            if self._exciton_overlap_data is not None:
+                client.set_file('exciton_overlap.dat.1', self._exciton_overlap_data, 'wb')
 
         #   if only one client is being used, don't open up threads, easier to debug
         if len(self._client_list) == 1:
@@ -1929,6 +1932,8 @@ class TCRunner(QCRunner):
             Precedence is given to the overlap_data argument, then to the overlap_file_loc.
             If neither is provided, the data it attempted to be read from the first client
             that has the exciton_overlap.dat.1 file. If no such file is found, nothing is done.
+
+
         '''
 
         if self._excited_type != 'cis':
@@ -1945,15 +1950,17 @@ class TCRunner(QCRunner):
 
         else:
             for client in self._client_list:                
-                if client.is_file('exciton_overlap.dat.1'):
-                    exciton_overlap_data = client.get_file('exciton_overlap.dat.1', 'rb')
+                if client.is_file('exciton_overlap.dat'):
+                    exciton_overlap_data = client.get_file('exciton_overlap.dat', 'rb')
                     break
 
         #   then copy data to all other server roots
         if exciton_overlap_data is not None:
             self._exciton_overlap_data = exciton_overlap_data
             for client in self._client_list:
-                client.set_file('exciton_overlap.dat.1', self._exciton_overlap_data, 'wb')
+                client._exciton_data = exciton_overlap_data
+                client.remove_file('exciton_overlap.dat', raise_error=False)
+                # client.set_file('exciton_overlap.dat.1', self._exciton_overlap_data, 'wb')
 
 
     def _run_numerical_derivatives(self, ref_job: TCJob, n_points=3, dx=0.01, overlap=False):

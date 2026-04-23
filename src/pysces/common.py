@@ -4,15 +4,27 @@ from collections import deque
 from pysces.input_simulation import * 
 from typing import Optional
 from abc import abstractmethod
+import pydantic
+from typing import Annotated
 
 
-class PhaseVars:
-    def __init__(self, time=0.0, elec_q0=None, elec_p0=None, nuc_q0=None, nuc_p0=None):
-        self.elec_q = elec_q0
-        self.elec_p = elec_p0
-        self.nuc_q = nuc_q0
-        self.nuc_p = nuc_p0
-        self.time = time
+NumpyArray = Annotated[np.ndarray, pydantic.BeforeValidator(np.asarray)]
+class PhaseVars(pydantic.BaseModel):
+    """
+    Phase space variables for a single trajectory.
+
+    elec_q, elec_p: shape [nel]  - electronic coordinates and momenta
+    nuc_q, nuc_p:   shape [3*N]  - nuclear Cartesian coordinates and momenta (flat, in bohr)
+    """
+    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
+
+
+    time: float = 0.0
+    elec_q: Optional[NumpyArray] = None
+    elec_p: Optional[NumpyArray] = None
+    nuc_q: Optional[NumpyArray] = None
+    nuc_p: Optional[NumpyArray] = None
+
 
     def get_vec(self):
         return np.concatenate((self.elec_q, self.elec_p, self.nuc_q, self.nuc_p))

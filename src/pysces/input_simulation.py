@@ -53,11 +53,14 @@ class TCRunnerOptions(BaseModel):
     fname_tc_freq: str = "tmp/tc_hf/hf.spherical.freq/Frequencies.dat"
 
     #   overlap data
-    fname_exciton_overlap_data: str = None
+    fname_exciton_overlap_data: str | None = None
 
     #   sometimes nacs can have different signs,
     #   this is a reference for the first frame
-    _initial_ref_nacs = None
+    _initial_ref_nacs: list | None = None
+
+    #   a unique identifier for the TeraChem runner options
+    name: str | None = None
 
 ########## DEFAULT SETTINGS ##########
 

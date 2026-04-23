@@ -88,9 +88,9 @@ def rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         if qc_runner == 'gamess':
             es_vars = run_gamess_at_geom(input_name, AN_mat, qC, atoms)
         elif qc_runner == 'terachem':
-            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
         else:
-            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
 
         # Total initial energy at t=0
         init_energy = get_energy(au_mas, q, p, es_vars.elecE)
@@ -141,9 +141,9 @@ def rk4(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         if qc_runner == 'gamess':
             es_vars = run_gamess_at_geom(input_name, AN_mat, qC, atoms)
         elif qc_runner == 'terachem':
-            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
         else:
-            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
         es_vars.time = t
 
         #correct nac sign
@@ -250,9 +250,9 @@ def verlet_main(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         if qc_runner == 'gamess':
             es_vars = run_gamess_at_geom(input_name, AN_mat, qC, atoms)
         elif qc_runner == 'terachem':
-            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
         else:
-            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
         # Total initial energy at t=0
         init_energy = print_energy_summary(au_mas, q, p, es_vars.elecE)
 
@@ -289,9 +289,9 @@ def verlet_main(initq, initp, tStop, H, restart, amu_mat, U, AN_mat):
         if qc_runner == 'gamess':
             es_vars = run_gamess_at_geom(input_name, AN_mat, qC, atoms)
         elif qc_runner == 'terachem':
-            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = tc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
         else:
-            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q0=qC))
+            es_vars = qc_runner.run_new_geom(PhaseVars(time=t, nuc_q=qC))
         es_vars.time = t
         timers.traj_timer.update(t, tStop)
 
