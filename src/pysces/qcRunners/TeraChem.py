@@ -14,6 +14,7 @@ _HAS_TCPARSE = True
 try:
     from tcparse import parse_from_list, TCJobData
 except ImportError:
+    print('Warning: tcparse not found, gradients and NACs will be run as separate TC Jobs')
     _HAS_TCPARSE = False
 
 from datetime import datetime
@@ -990,7 +991,6 @@ class TCRunner(QCRunner):
         self._ports = tc_opts.port
         self._server_roots = tc_opts.server_root
         self._server_disabled = server_disabled
-        self._prepare_server_info()  # Validate and process server information
 
         # Job-related options
         self._spec_job_opts = {}
@@ -1071,48 +1071,6 @@ class TCRunner(QCRunner):
         
         return benchmarks
 
-    def _prepare_server_info(self):
-        """Ensure server roots are valid paths and check server configuration."""
-
-        main_error_message = 'No host specified for TeraChem servers. \
-                              Either set "{}" in the options file, or \
-                              set the environment variable "{}"'
-
-        #   environment variables take precedence over options file
-
-        env_hosts = os.environ.get('PYSCES_TC_HOST', None)
-        env_ports = os.environ.get('PYSCES_TC_PORT', None)
-        env_server_roots = os.environ.get('PYSCES_TC_SERVER_ROOT', None)
-
-        if env_hosts is not None:
-            self._hosts = env_hosts.split(',')
-        if env_ports is not None:
-            self._ports = [int(x) for x in env_ports.split(',')]
-        if env_server_roots is not None:
-            self._server_roots = env_server_roots.split(':')
-
-        if self._hosts is None:
-            raise ValueError(main_error_message.format('tct_host', 'PYSCES_TC_HOST'))
-        
-        if self._ports is None:
-            raise ValueError(main_error_message.format('tct_port', 'PYSCES_TC_PORT'))
-
-        if self._server_roots  is None:
-            raise ValueError(main_error_message.format('tct_server_root', 'PYSCES_TC_SERVER_ROOT'))
-
-        if isinstance(self._hosts, str):
-            self._hosts = [self._hosts]
-        if isinstance(self._ports, int):
-            self._ports = [self._ports]
-        if isinstance(self._server_roots, str):
-            self._server_roots = [self._server_roots]
-
-        for i, root in enumerate(self._server_roots):
-            os.makedirs(root, exist_ok=True)
-            self._server_roots[i] = os.path.abspath(root)
-
-        if len({len(self._hosts), len(self._ports), len(self._server_roots)}) != 1:
-            raise ValueError('Number of servers must match the number of port numbers and root locations')
 
     def _initialize_job_options(self, tc_opts: TCRunnerOptions):
         """Initialize job options."""
@@ -2374,8 +2332,8 @@ def _run_batch_jobs(jobs_batch: TCJobBatch):
         j: TCJob
 
         client: TCClientExtra = j.client
-        client.log_message(f"Running {j.name}")
-        print(f"Running {j.name}")
+        client.log_message(f"Running {j.name} on {client.host}:{client.port}")
+        print(f"Running {j.name} on {client.host}:{client.port}")
 
         max_tries = 5
         try_count = 0
