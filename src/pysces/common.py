@@ -2,10 +2,11 @@ import numpy as np
 from scipy.interpolate import interp1d
 from collections import deque
 from pysces.input_simulation import * 
-from typing import Optional
+from typing import Optional, Any
 from abc import abstractmethod
 import pydantic
 from typing import Annotated
+from dataclasses import dataclass, field
 
 
 NumpyArray = Annotated[np.ndarray, pydantic.BeforeValidator(np.asarray)]
@@ -13,8 +14,12 @@ class PhaseVars(pydantic.BaseModel):
     """
     Phase space variables for a single trajectory.
 
-    elec_q, elec_p: shape [nel]  - electronic coordinates and momenta
-    nuc_q, nuc_p:   shape [3*N]  - nuclear Cartesian coordinates and momenta (flat, in bohr)
+    Parameters
+    ----------
+    elec_q, elec_p: shape [nel]
+        electronic coordinates and momenta
+    nuc_q, nuc_p:   shape [3*N]
+        nuclear Cartesian coordinates and momenta (flat, in bohr)
     """
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -90,54 +95,64 @@ class QCRunner:
     def cleanup(self):
         pass
     
+@dataclass
 class ESVars:
-    def __init__(self,
-                time: float = None,
-                all_energies: Optional[np.array] = None, 
-                elecE: Optional[np.array] = None, 
-                grads: Optional[np.array] = None,
-                nacs: Optional[np.array] = None,
-                dipole_matrix: Optional[np.array] = None,
-                dipole_matrix_grads: Optional[np.array] = None,
-                trans_dips: Optional[np.array] = None,
-                timings: Optional[dict] = None,
-                eval_func = None,
-                other: Optional[dict] = None
-    ) -> None:
+    """
+    Electronic structure variables returned by a QC calculation.
 
-        '''
-        Parameters
-        ----------
+    Parameters
+    ----------
+    all_energies : np.ndarray
+        All energies of the system, including those of the states being propogated on
+    elecE : np.ndarray, shape=(nstates,)
+        Electronic energies being propogated on. Corresponds to the gradients and NACs.
+        This is a subset of all_energies.
+    grads : np.ndarray, shape=(nstates, ndof)
+        Gradients of the electronic energies being propogated on.
+    nacs : np.ndarray, shape=(nstates, nstates, ndof)
+        Non-adiabatic couplings between the electronic energies being propogated.
+    dipole_matrix : np.ndarray, shape=(nstates, nstates, 3)
+        Dipole matrix between the electronic states being propogated.
+    dipole_matrix_grads : np.ndarray, shape=(nstates, nstates, 3, ndof)
+        Gradients of the dipole matrix between the electronic states being propogated.
+    trans_dips : np.ndarray, shape=(nstates, nstates, 3)
+        Transition dipoles between the electronic energies being propogated.
+    timings : dict
+        Dictionary of timings for different parts of the QC calculation, for performance monitoring.
+    eval_func : callable
+        The function used to evaluate the electronic structure variables, used by the MD integrators
+        for interpolation and extrapolation.
+    """
 
-        all_energies : np.ndarray
-            All energies of the system, including those of the states being propogated on
-        elecE : np.ndarray, shape=(nstates,)
-            Electronic energies being propogated on. Corresponds to the gradients and NACs.
-            This is a subset of all_energies.
-        grads : np.ndarray, shape=(nstates, ndof)
-            Gradients of the electronic energies being propogated on.
-        nacs : np.ndarray, shape=(nstates, nstates, ndof)
-            Non-adiabatic couplings between the electronic energies being propogated.
-        trans_dips : np.ndarray, shape=(nstates, nstates, 3)
-            Transition dipoles between the electronic energies being propogated.
-        '''
-
-        self.time = time
-        self.all_energies = all_energies
-        self.elecE = elecE
-        self.grads = grads
-        self.nacs = nacs
-        self.dipole_matrix = dipole_matrix
-        self.dipole_matrix_grads = dipole_matrix_grads
-        self.trans_dips = trans_dips
-        self.timings = timings if timings is not None else {}
-        self.eval_func = eval_func
+    time: Optional[float] = None
+    all_energies: Optional[np.ndarray] = None
+    elecE: Optional[np.ndarray] = None
+    grads: Optional[np.ndarray] = None
+    nacs: Optional[np.ndarray] = None
+    dipole_matrix: Optional[np.ndarray] = None
+    dipole_matrix_grads: Optional[np.ndarray] = None
+    trans_dips: Optional[np.ndarray] = None
+    timings: dict = field(default_factory=dict)
+    eval_func: Optional[Any] = None
+    other: Optional[dict] = None
 
     @property
     def complete(self) -> bool:
         return (self.elecE is not None and
                 self.grads is not None and
                 self.nacs is not None)
+    
+    def to_dict(self):
+        return {
+            'time': self.time,
+            'all_energies': self.all_energies.tolist() if self.all_energies is not None else None,
+            'elecE': self.elecE.tolist() if self.elecE is not None else None,
+            'grads': self.grads.tolist() if self.grads is not None else None,
+            'nacs': self.nacs.tolist() if self.nacs is not None else None,
+            'dipole_matrix': self.dipole_matrix.tolist() if self.dipole_matrix is not None else None,
+            'dipole_matrix_grads': self.dipole_matrix_grads.tolist() if self.dipole_matrix_grads is not None else None,
+            'trans_dips': self.trans_dips.tolist() if self.trans_dips is not None else None
+        }
 
 
 class _HistoryInterpolation:

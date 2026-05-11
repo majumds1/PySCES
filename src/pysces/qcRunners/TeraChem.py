@@ -534,7 +534,6 @@ class TCClientExtra(TCPBClient):
         return data
 
     def set_file(self, file_name, data, mode='wb'):
-        print('SETTING FILE: ', file_name)
         file_loc = self._convert_file_path(file_name)
             
         with open(file_loc, mode) as file:
