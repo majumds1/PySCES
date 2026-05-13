@@ -31,6 +31,7 @@ class Test_TC_CIS(unittest.TestCase):
 
         with open('../host_ports.json') as file:
             tcr_settings = json.load(file)
+        print(tcr_settings)
         pysces.reset_settings()
         pysces.options.input_local_settings(**tcr_settings)
         pysces.options.make_logging_dir()
@@ -64,7 +65,7 @@ class Test_TC_CIS(unittest.TestCase):
         for key in list(restart_tst.keys()):
             if key not in restart_ref:
                 restart_tst.pop(key)
-        assert_dictionary(self, restart_ref, restart_tst, atol=1e-6)
+        assert_dictionary(self, restart_ref, restart_tst, atol=1e-6, exit_on_error=True)
 
         cleanup()
 

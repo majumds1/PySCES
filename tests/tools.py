@@ -47,23 +47,31 @@ def parse_xyz_data(file_loc):
 
     return all_frames
 
-def assert_dictionary(testcase: unittest.TestCase, dict_ref, dict_tst, atol=1e-6, rtol=1e-6,):
+def assert_dictionary(testcase: unittest.TestCase, dict_ref, dict_tst, atol=1e-6, rtol=1e-6, exit_on_error=True):
     for key, value in dict_ref.items():
         if key not in dict_tst:
             raise ValueError(f'key "{key}" not in test dictionary')
         msg = f'value for key "{key}" not equal between both dicts'
         if isinstance(value, dict):
-            assert_dictionary(testcase, dict_ref[key], dict_tst[key], atol, rtol)
-        elif isinstance(value, str) or isinstance(value, int):
-            testcase.assertEqual(value, dict_tst[key], msg=msg)
-        elif isinstance(value, float):
-            np.testing.assert_allclose(value, dict_tst[key], atol=atol, rtol=rtol, err_msg=msg)
-        elif isinstance(value, np.ndarray):
-            np.testing.assert_allclose(value, dict_tst[key], atol=atol, rtol=rtol, err_msg=msg)
-        elif isinstance(value, list):
-            array_ref = np.array(value)
-            array_tst = np.array(dict_tst[key])
-            np.testing.assert_allclose(array_ref, array_tst, atol=atol, rtol=rtol, err_msg=msg)
+            assert_dictionary(testcase, dict_ref[key], dict_tst[key], atol, rtol, exit_on_error)
+        else:
+            try:
+                if isinstance(value, str) or isinstance(value, int):
+                    testcase.assertEqual(value, dict_tst[key], msg=msg)
+                elif isinstance(value, float):
+                    np.testing.assert_allclose(value, dict_tst[key], atol=atol, rtol=rtol, err_msg=msg)
+                elif isinstance(value, np.ndarray):
+                    np.testing.assert_allclose(value, dict_tst[key], atol=atol, rtol=rtol, err_msg=msg)
+                elif isinstance(value, list):
+                    array_ref = np.array(value)
+                    array_tst = np.array(dict_tst[key])
+                    np.testing.assert_allclose(array_ref, array_tst, atol=atol, rtol=rtol, err_msg=msg)
+            except AssertionError as e:
+                print(f'Assertion failed for key: {key}')
+                print(f'Reference value: {value}')
+                print(f'Test value: {dict_tst[key]}')
+                if exit_on_error:
+                    raise e
 
 def check_for_open_files():
     # Trigger garbage collection

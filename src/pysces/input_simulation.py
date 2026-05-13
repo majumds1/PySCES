@@ -10,17 +10,20 @@ Created on Wed May  3 19:05:28 2023
 Repository of simulation variables
 """
 import os
-import sys
+import traceback
 import shutil
 from pysces import input_simulation as opts
 from subprocess import Popen
 from typing import Callable
 import numpy as np
-class TCRunnerOptions:
+# from dataclasses import dataclass, field
+from pydantic import BaseModel, model_validator
+
+class TCRunnerOptions(BaseModel):
     #   TeraChem runner options
-    host: str
-    port: int
-    server_root: str
+    host: str | list[str] | None = None
+    port: int | list[int] | None = None
+    server_root: str | list[str] | None = None
     job_options: dict = {}
     state_options: dict = {
         'max_state': 1, 'grads': 'all'
@@ -49,12 +52,60 @@ class TCRunnerOptions:
     fname_tc_freq: str = "tmp/tc_hf/hf.spherical.freq/Frequencies.dat"
 
     #   overlap data
-    fname_exciton_overlap_data: str = None
+    fname_exciton_overlap_data: str | None = None
 
     #   sometimes nacs can have different signs,
     #   this is a reference for the first frame
-    _initial_ref_nacs = None
+    _initial_ref_nacs: list | None = None
 
+    #   a unique identifier for the TeraChem runner options
+    name: str | None = None
+
+    @model_validator(mode='after')
+    def check_server_info(self):
+        """Ensure server roots are valid paths and check server configuration."""
+
+        main_error_message = 'No host specified for TeraChem servers. \
+                              Either set "{}" in the options file, or \
+                              set the environment variable "{}"'
+
+        #   environment variables take precedence over options file
+
+        env_hosts = os.environ.get('PYSCES_TC_HOST', None)
+        env_ports = os.environ.get('PYSCES_TC_PORT', None)
+        env_server_roots = os.environ.get('PYSCES_TC_SERVER_ROOT', None)
+
+        if env_hosts is not None:
+            self.host = [x for x in env_hosts.split(',') if len(x) > 0]
+        if env_ports is not None:
+            self.port = [int(x) for x in env_ports.split(',') if len(x) > 0]
+        if env_server_roots is not None:
+            self.server_root = [x for x in env_server_roots.split(':') if len(x) > 0]
+
+        if self.host is None:
+            raise ValueError(main_error_message.format('tct_host', 'PYSCES_TC_HOST'))
+        
+        if self.port is None:
+            raise ValueError(main_error_message.format('tct_port', 'PYSCES_TC_PORT'))
+
+        if self.server_root  is None:
+            raise ValueError(main_error_message.format('tct_server_root', 'PYSCES_TC_SERVER_ROOT'))
+
+        if isinstance(self.host, str):
+            self.host = [self.host]
+        if isinstance(self.port, int):
+            self.port = [self.port]
+        if isinstance(self.server_root, str):
+            self.server_root = [self.server_root]
+
+        for i, root in enumerate(self.server_root):
+            os.makedirs(root, exist_ok=True)
+            self.server_root[i] = os.path.abspath(root)
+
+        if len({len(self.host), len(self.port), len(self.server_root)}) != 1:
+            raise ValueError('Number of servers must match the number of port numbers and root locations')
+
+        return self
 
 ########## DEFAULT SETTINGS ##########
 
@@ -166,7 +217,7 @@ debug_eff_wigner_nel = -1
 
 
 ########## GLOBAL SETTINGS, SHOULD NOT BE SET BY USER ##########
-tc_runner_opts = TCRunnerOptions()
+tc_runner_opts = TCRunnerOptions(host=tcr_host, port=tcr_port, server_root=tcr_server_root)
 _set_defaults = False
 defaults = {}
 if not _set_defaults:
@@ -200,8 +251,9 @@ def input_local_settings(**kwargs):
             exec(local_lines, globals())
 
         except Exception as e:
-            print("Error loading local settings: ", e)
-            return
+            print("Error loading local settings: ")
+            print(traceback.format_exc())
+            raise e
         
     if len(kwargs) > 0:
         #   if there are any kwargs, we will update the locals with them
@@ -249,11 +301,14 @@ def _check_settings(local: dict):
 
 
     #   TeraChem settings
+    field_updates = {}
     for k, v in globals().items():
         if k.startswith('tcr_') or k.startswith('_tcr_'):
-            tc_runner_opts.__dict__[k[4:]] = v
+            field_updates[k[4:]] = v
         elif k.startswith('fname_'):
-            tc_runner_opts.__dict__[k] = v
+            field_updates[k] = v
+    opts.tc_runner_opts = TCRunnerOptions(**{**opts.tc_runner_opts.model_dump(), **field_updates})
+    tc_runner_opts = opts.tc_runner_opts
 
     if opts.qc_runner == 'terachem':
         max_state = tc_runner_opts.state_options.get('max_state', False)
@@ -272,6 +327,7 @@ def _check_settings(local: dict):
         if 'nacs' not in tc_runner_opts.state_options:
             tc_runner_opts.state_options['nacs'] = 'all'
 
+        opts.tcr_state_options = tc_runner_opts.state_options
         opts.nel = len(grads)
         if nel != len(opts.q0) or nel != len(opts.p0):
             print(f"WARNING: Number of initial electronic coherent states (q0 and p0)")

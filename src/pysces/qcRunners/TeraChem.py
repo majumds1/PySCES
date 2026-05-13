@@ -14,6 +14,7 @@ _HAS_TCPARSE = True
 try:
     from tcparse import parse_from_list, TCJobData
 except ImportError:
+    print('Warning: tcparse not found, gradients and NACs will be run as separate TC Jobs')
     _HAS_TCPARSE = False
 
 from datetime import datetime
@@ -37,15 +38,18 @@ import itertools
 from collections import deque
 import qcelemental as qcel
 import base64
-from pprint import pprint
 
+def str_to_bool(s):
+    return s.strip().lower() in ('1', 'true', 'yes')
 
 _server_processes = {}
 
 #   debug flags
-_DEBUG = bool(int(os.environ.get('DEBUG', False))) # used with numerical derivatives
+_DEBUG = str_to_bool(os.environ.get('DEBUG', 'False')) # used with numerical derivatives
 _DEBUG_LOAD_TRAJ = os.environ.get('DEBUG_LOAD_TRAJ', False)
 _DEBUG_SAVE_TRAJ = os.environ.get('DEBUG_SAVE_TRAJ', False)
+if any([_DEBUG, _DEBUG_LOAD_TRAJ, _DEBUG_SAVE_TRAJ]):
+    print('### DEBUG MODE ENABLED ###')
 
 
 def synchronized(function):
@@ -73,7 +77,6 @@ class TCClientExtra(TCPBClient):
             log (bool): Whether to enable logging. Defaults to True.
         """
         
-        
         self._log = None
         if log and os.path.isdir(logging_dir):
             log_file_loc = os.path.join(logging_dir, f'{host}_{port}.log')
@@ -84,6 +87,7 @@ class TCClientExtra(TCPBClient):
         self._last_known_curr_dir = None
         self._results_history = deque(maxlen=10)
         self._exciton_overlap_data = None
+        self._exciton_overlap = None
         self._exciton_data = None
         self._scf_guess_file = None
         self._cas_guess_file = None
@@ -230,17 +234,14 @@ class TCClientExtra(TCPBClient):
         scf_guess, cis_guess, cas_guess = self.get_guess_file_locs(prev_results_hist)
         guess_data = {}
         if os.path.isfile(str(cas_guess)):
-            with open(cas_guess, 'rb') as file:
-                data = file.read()
-                guess_data['casguess'] = base64.b64encode(data).decode('utf-8')
+            data = self.get_file(cas_guess, 'rb')
+            guess_data['casguess'] = base64.b64encode(data).decode('utf-8')
         if os.path.isfile(str(scf_guess)):
-            with open(scf_guess, 'rb') as file:
-                data = file.read()
-                guess_data['scfguess'] = base64.b64encode(data).decode('utf-8')
+            data = self.get_file(scf_guess, 'rb')
+            guess_data['scfguess'] = base64.b64encode(data).decode('utf-8')
         if os.path.isfile(str(cis_guess)):
-            with open(cis_guess, 'rb') as file:
-                data = file.read()
-                guess_data['cisguess'] = base64.b64encode(data).decode('utf-8')
+            data = self.get_file(cis_guess, 'rb')
+            guess_data['cisguess'] = base64.b64encode(data).decode('utf-8')
 
     def set_guess_files_from_job(self, prev_job: TCJob):
         '''
@@ -329,8 +330,7 @@ class TCClientExtra(TCPBClient):
             print(job_dir)
             return
 
-        with open(tc_out_file_loc, 'r') as file:
-            lines = file.readlines()
+        lines = self.get_file(tc_out_file_loc, 'r').splitlines()
         print('End of tc.out file at:')
         print(job_dir)
         print('\n START OF FILE .... \n')
@@ -458,15 +458,15 @@ class TCClientExtra(TCPBClient):
                         data = [float(x) for x in sp[1:]]
                         overlap_data.append(data)
                 overlap_data = np.array(overlap_data)
-                self._exciton_data = overlap_data
+                self._exciton_overlap = overlap_data
                 results['exciton_overlap'] = overlap_data
                 self.remove_file('exciton.dat')
+                self.remove_file('exciton_overlap.dat.1')
             else:
                 #   exciton_overlap.dat exists but exciton_overlap.dat.1 does not
                 #   this occus the first time exciton_overlap.dat is read by TeraChem, so we
                 #   assume that it's the first frame that does so. 
                 pass
-            self.rename_file('exciton_overlap.dat', 'exciton_overlap.dat.1')
 
             if opts.get('cisrestart', None):
                 self._possible_files_to_remove.add(opts.get('cisrestart', None))
@@ -481,14 +481,14 @@ class TCClientExtra(TCPBClient):
     def _append_output_file(self, results: dict):
         output_file = os.path.join(self.server_root, results['job_dir'], 'tc.out')
         if os.path.isfile(output_file):
-            with open(output_file, 'r') as file:
-                lines = file.readlines()
+            lines = self.get_file(output_file, 'r').splitlines()
             #   remove line breaks
             for n in range(len(lines)):
-                lines[n] = lines[n][0:-1]
+                lines[n] = lines[n].rstrip('\n')
             results['tc.out'] = lines
         else:
             print("Warning: Output file not found at ", output_file)
+            results['tc.out'] = []
 
     def clean_up_stale_files(self):
         for file in ['exciton.dat', 'exciton_overlap.dat', 'exciton_overlap.dat.1']:
@@ -571,7 +571,16 @@ class TCCLientExtraDebug(TCClientExtra):
     def compute_job(self, job: TCJob, append_tc_out=False, use_guess_files=True, start_fresh=False):
         print('DEBUG MODE: Computing job')
 
-        results = self.debug_data[job.jobID].results
+        fake_results = {
+            'energy': -75.0,
+            'grad': np.zeros_like(job.geom).tolist(),
+            'job_dir': f'{job.job_type}_dir',
+            'orbfile': f'{job.job_type}_orbfile',
+        }
+        if job.jobID not in self.debug_data:
+            results = fake_results
+        else:
+            results = self.debug_data[job.jobID].results
 
         if start_fresh:
             self.clean_up_stale_files()
@@ -742,7 +751,7 @@ def _start_TC_server(port: int):
 
 class TCJob():
     __job_counter = 0
-    def __init__(self, geom, opts, job_type, excited_type, state, name='', client=None) -> None:
+    def __init__(self, geom: np.ndarray, opts: dict, job_type: str, excited_type: str, state: 0, name='', client=None) -> None:
         self.geom = np.array(geom)
         self.excited_type: Literal['cas', 'cis'] = excited_type
         self.opts = dict(opts)
@@ -757,7 +766,7 @@ class TCJob():
         if job_type not in ['energy', 'gradient', 'coupling']:
             raise ValueError('TCJob job_type must be either "energy", "gradient", or "coupling"')
 
-        assert self.excited_type in ('cas', 'cis')
+        assert self.excited_type in ('cas', 'cis'), 'TCJob excited_type must be either "cas" or "cis"'
 
         TCJob.__job_counter += 1
         self.__jobID = TCJob.__job_counter
@@ -969,18 +978,19 @@ class TCJobBatch():
         return timings
 
 class TCRunner(QCRunner):
-    def __init__(self, atoms: list[str], tc_opts: TCRunnerOptions, max_wait=20) -> None:
+    def __init__(self, atoms: list[str], tc_opts: TCRunnerOptions, max_wait=20, server_disabled=False) -> None:
         super().__init__()
         
         # Atoms and max_wait
         self._atoms = tuple(atoms)
         self._max_wait = max_wait
+        self._name = tc_opts.name
 
         # Hosts, ports, and server roots
         self._hosts = tc_opts.host
         self._ports = tc_opts.port
         self._server_roots = tc_opts.server_root
-        self._prepare_server_info()  # Validate and process server information
+        self._server_disabled = server_disabled
 
         # Job-related options
         self._spec_job_opts = {}
@@ -1035,7 +1045,6 @@ class TCRunner(QCRunner):
         # Print options summary
         self._print_options_summary()
         self._coordinate_exciton_overlap_files(tc_opts.fname_exciton_overlap_data)
-        # time.sleep(60)
 
         #   interpolation options
         self._interpolate_grads = False
@@ -1062,48 +1071,6 @@ class TCRunner(QCRunner):
         
         return benchmarks
 
-    def _prepare_server_info(self):
-        """Ensure server roots are valid paths and check server configuration."""
-
-        main_error_message = 'No host specified for TeraChem servers. \
-                              Either set "{}" in the options file, or \
-                              set the environment variable "{}"'
-
-        #   environment variables take precedence over options file
-
-        env_hosts = os.environ.get('PYSCES_TC_HOST', None)
-        env_ports = os.environ.get('PYSCES_TC_PORT', None)
-        env_server_roots = os.environ.get('PYSCES_TC_SERVER_ROOT', None)
-
-        if env_hosts is not None:
-            self._hosts = env_hosts.split(',')
-        if env_ports is not None:
-            self._ports = [int(x) for x in env_ports.split(',')]
-        if env_server_roots is not None:
-            self._server_roots = env_server_roots.split(':')
-
-        if self._hosts is None:
-            raise ValueError(main_error_message.format('tct_host', 'PYSCES_TC_HOST'))
-        
-        if self._ports is None:
-            raise ValueError(main_error_message.format('tct_port', 'PYSCES_TC_PORT'))
-
-        if self._server_roots  is None:
-            raise ValueError(main_error_message.format('tct_server_root', 'PYSCES_TC_SERVER_ROOT'))
-
-        if isinstance(self._hosts, str):
-            self._hosts = [self._hosts]
-        if isinstance(self._ports, int):
-            self._ports = [self._ports]
-        if isinstance(self._server_roots, str):
-            self._server_roots = [self._server_roots]
-
-        for i, root in enumerate(self._server_roots):
-            os.makedirs(root, exist_ok=True)
-            self._server_roots[i] = os.path.abspath(root)
-
-        if len({len(self._hosts), len(self._ports), len(self._server_roots)}) != 1:
-            raise ValueError('Number of servers must match the number of port numbers and root locations')
 
     def _initialize_job_options(self, tc_opts: TCRunnerOptions):
         """Initialize job options."""
@@ -1188,7 +1155,7 @@ class TCRunner(QCRunner):
                 excited_options['cassinglets'] = max_state + 1
 
         if max_state > 0 and excited_type == 'cis':
-            excited_options['cisrestart'] = 'cis_restart_' + str(os.getpid())
+            excited_options['cisrestart'] = 'cis_restart_' + str(os.getpid()) + f'_{self._name}'*(self._name is not None)
         base_options['purify'] = False
         base_options['atoms'] = self._atoms
 
@@ -1217,7 +1184,6 @@ class TCRunner(QCRunner):
                 if self._excited_type == 'cis':
                     job_opts.update(excited_options)
                     job_opts['cistarget'] = state
-                    job_opts['cisexcitonoverlap'] = 'yes'
 
             self.grad_job_options[name] = job_opts
 
@@ -1232,7 +1198,6 @@ class TCRunner(QCRunner):
             if self._excited_type == 'cis':
                 job_opts.update(excited_options)
                 job_opts['cistarget'] = state
-                job_opts['cisexcitonoverlap'] = 'yes'
             elif self._excited_type == 'cas':
                 job_opts.update(excited_options)
                 job_opts['castarget'] = state
@@ -1272,8 +1237,8 @@ class TCRunner(QCRunner):
             #     print('DEBUG_TRAJ set, TeraChem clients will not be opened')
             #     break
 
-            if _DEBUG_LOAD_TRAJ:
-                client = TCCLientExtraDebug(h, p, s)
+            if _DEBUG_LOAD_TRAJ or self._server_disabled:
+                client = TCCLientExtraDebug(h, p, debug=True, server_root=s)
             else:
                 client = TCClientExtra(host=h, port=p, server_root=s)
             client.startup(max_wait=self._max_wait)
@@ -1329,6 +1294,9 @@ class TCRunner(QCRunner):
             for k, v in self._initial_frame_options.items():
                 print(f'    {k + " ":.<24s} {v}')
 
+        if self.combine_jobs:
+            return
+        
         print('\n TC Gradient Specific Options:')
         for k, v in self.grad_job_options.items():
             print(f'    {k}:')
@@ -1360,7 +1328,7 @@ class TCRunner(QCRunner):
         if _DEBUG_SAVE_TRAJ:
             with open(_DEBUG_SAVE_TRAJ, 'wb') as file:
                 pickle.dump(self._debug_traj, file)
-        if _DEBUG_LOAD_TRAJ:
+        if _DEBUG_LOAD_TRAJ or self._server_disabled:
             return
         for client in self._client_list:
             client.disconnect()
@@ -1400,8 +1368,10 @@ class TCRunner(QCRunner):
             results['tc.out'] = lines
         else:
             print("Warning: Output file not found at ", output_file)
+            results['tc.out'] = []
         return results
     
+    #   TODO: Move to TCClientExtra
     @staticmethod
     def remove_previous_job_dir(client: TCClientExtra):
         results = client.prev_results
@@ -1409,6 +1379,7 @@ class TCRunner(QCRunner):
         job_dir = results['job_dir']
         shutil.rmtree(job_dir)
 
+    #   TODO: Move to TCClientExtra
     @staticmethod
     def remove_previous_scr_dir(client: TCClientExtra):
         results = client.prev_results
@@ -1558,15 +1529,10 @@ class TCRunner(QCRunner):
 
         all_energies, elecE, grad, nac, trans_dips, mu_deriv_matrix = self._extract_results(job_batch)
 
-        print('IN RUN NEW GEOM')
-        for i in range(nac.shape[0]):
-            for j in range(i+1, nac.shape[0]):
-                print('    NAC: ', np.linalg.norm(nac[i,j,:]))
-
         self._initialize_nac_sign(nac)
         self._finalize_frame(job_batch)
 
-        return ESVars(None, all_energies, elecE, grad, nac, trans_dips, job_batch.timings)
+        return ESVars(None, all_energies, elecE, grad, nac, trans_dips=trans_dips, timings=job_batch.timings)
         # return (all_energies, elecE, grad, nac, trans_dips, job_batch.timings)
     
     # def set_logger():
@@ -1635,13 +1601,15 @@ class TCRunner(QCRunner):
         else:
             raise NotImplementedError('Interpolation of gradients and NACs is not yet implemented')
 
-    def create_jobs(self, geom, energy_only = False, grads = [], nacs = [], dipoles = [], tr_dipoles = []):
+    def create_jobs(self, geom, energy_only = False, grads = [], nacs = [], dipoles = [], tr_dipoles = [], fragment_idx = None):
         if self._combine_jobs:
-            return self._create_jobs_bulk(geom, energy_only, grads, nacs, dipoles, tr_dipoles)
+            return self._create_jobs_bulk(geom, self._client_list, energy_only, grads, nacs, dipoles, tr_dipoles)
         else:
-            return self._create_jobs_singles(geom, energy_only, grads, nacs)
+            job_batch =  self._create_jobs_singles(geom, energy_only, grads, nacs)
+            self._assign_clients_equally(job_batch)
+            return job_batch
 
-    def _create_jobs_bulk(self, geom, energy_only = False, grads: list[int]=[], nacs: list[int, int]=[], dipoles: list[int]=[], tr_dipoles: list[int, int]=[]):
+    def _create_jobs_bulk(self, geom, client_list: list[TCClientExtra], energy_only = False, grads: list[int]=[], nacs: list[int, int]=[], dipoles: list[int]=[], tr_dipoles: list[int, int]=[]):
 
         if self._excited_type != 'cis':
             raise ValueError('Bulk jobs are only supported for CIS excited state calculations')
@@ -1650,11 +1618,11 @@ class TCRunner(QCRunner):
 
         #   run the job balancing algorithm
         es_tasks = ESDerivTasks(grads, nacs, dipoles, tr_dipoles)
-        balanced = balance_tasks_optimum(self._task_benchmarks, es_tasks, len(self._client_list))
-        self._tc_client_assignments = [[f'combo_{i}'] for i in range(len(self._client_list))]
+        balanced = balance_tasks_optimum(self._task_benchmarks, es_tasks, len(client_list))
+        self._tc_client_assignments = [[f'combo_{i}'] for i in range(len(client_list))]
 
         #   distribute the balanced tasks across all clients
-        for i, client in enumerate(self._client_list):
+        for i, client in enumerate(client_list):
             client_tasks = balanced[i]
             job = TCJob(geom, self._base_options, 'energy', self._excited_type, 0, name=f'combo_{i}')
             prop_file_contents = ''
@@ -1696,8 +1664,10 @@ class TCRunner(QCRunner):
             job.opts.update(self._excited_options)
 
             self._apply_initial_frame_options(job)
-            client.set_file('cispropertyfile', prop_file_contents, 'w')
-            job.opts['cispropertyfile'] = client.get_file_loc('cispropertyfile')
+            cis_prop_file_name = f'cispropertyfile' + f'_{self._name}'*(self._name is not None)
+            client.set_file(cis_prop_file_name, prop_file_contents, 'w')
+            job.opts['cispropertyfile'] = client.get_file_loc(cis_prop_file_name)
+            job.client = client
 
             job_batch.append(job)
 
@@ -1823,6 +1793,7 @@ class TCRunner(QCRunner):
                 pickle.dump(self._debug_traj, file)
 
     def _assign_clients_by_request(self, jobs_batch: TCJobBatch):
+        raise DeprecationWarning('Client assignment by request is deprecated and will be removed in a future release. Please use the bulk job creation method instead.')
         all_job_names = [j.name for j in jobs_batch.jobs]
         clients_IDs_for_other = []
 
@@ -1860,13 +1831,18 @@ class TCRunner(QCRunner):
         # if debug_batch is not None: 
         #     return debug_batch
         
-        if len(self._tc_client_assignments) > 0:
-            self._assign_clients_by_request(jobs_batch)
-        else:
-            self._assign_clients_equally(jobs_batch)
+        # if len(self._tc_client_assignments) > 0:
+        #     self._assign_clients_by_request(jobs_batch)
+        # else:
+        #     self._assign_clients_equally(jobs_batch)
 
         if not jobs_batch.check_client():
             raise ValueError('Not all jobs have been assigned a client')
+        
+        #   make sure exciton overlap data is on all clients before running jobs
+        for client in self._client_list:
+            if self._exciton_overlap_data is not None:
+                client.set_file('exciton_overlap.dat.1', self._exciton_overlap_data, 'wb')
 
         #   if only one client is being used, don't open up threads, easier to debug
         if len(self._client_list) == 1:
@@ -1913,6 +1889,8 @@ class TCRunner(QCRunner):
             Precedence is given to the overlap_data argument, then to the overlap_file_loc.
             If neither is provided, the data it attempted to be read from the first client
             that has the exciton_overlap.dat.1 file. If no such file is found, nothing is done.
+
+
         '''
 
         if self._excited_type != 'cis':
@@ -1929,15 +1907,17 @@ class TCRunner(QCRunner):
 
         else:
             for client in self._client_list:                
-                if client.is_file('exciton_overlap.dat.1'):
-                    exciton_overlap_data = client.get_file('exciton_overlap.dat.1', 'rb')
+                if client.is_file('exciton_overlap.dat'):
+                    exciton_overlap_data = client.get_file('exciton_overlap.dat', 'rb')
                     break
 
         #   then copy data to all other server roots
         if exciton_overlap_data is not None:
             self._exciton_overlap_data = exciton_overlap_data
             for client in self._client_list:
-                client.set_file('exciton_overlap.dat.1', self._exciton_overlap_data, 'wb')
+                client._exciton_data = exciton_overlap_data
+                client.remove_file('exciton_overlap.dat', raise_error=False)
+                # client.set_file('exciton_overlap.dat.1', self._exciton_overlap_data, 'wb')
 
 
     def _run_numerical_derivatives(self, ref_job: TCJob, n_points=3, dx=0.01, overlap=False):
@@ -2352,8 +2332,8 @@ def _run_batch_jobs(jobs_batch: TCJobBatch):
         j: TCJob
 
         client: TCClientExtra = j.client
-        client.log_message(f"Running {j.name}")
-        print(f"Running {j.name}")
+        client.log_message(f"Running {j.name} on {client.host}:{client.port}")
+        print(f"Running {j.name} on {client.host}:{client.port}")
 
         max_tries = 5
         try_count = 0
